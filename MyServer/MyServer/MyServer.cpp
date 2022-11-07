@@ -15,7 +15,9 @@ public:
 
 	void start() {
 		started_ = true;
-		do_read();
+		do_login();
+		//do_read();
+		++number_clients_;
 	}
 
 	static ptr new_() {
@@ -26,13 +28,20 @@ public:
 		if (!started_) return;
 		started_ = false;
 		sock_.close();
+		--number_clients_;
+
+		std::cout << client_name_ << " left the room." << std::endl;
+		if (number_clients_ == 1)
+			std::cout << " There is " << number_clients_ << " person into the room." << std::endl;
+		else
+			std::cout << " There are " << number_clients_ << " people into the room." << std::endl;
 	}
 	ip::tcp::socket& sock() { return sock_; }
 
 	void on_read(const error_code& err, size_t bytes) {
 		if (!err) {
 			std::string msg(read_buffer_, bytes);
-			std::cout << msg << std::endl;
+			std::cout << client_name_ << ": " << msg;
 			//do_write(msg + "\n");
 			memset(read_buffer_, 0, sizeof(read_buffer_));
 			do_read();
@@ -43,12 +52,42 @@ public:
 			stop();
 		}
 	}
+
+	void on_login(const error_code& err, size_t bytes) {
+		if (!err) {
+			std::string msg(read_buffer_, bytes);
+
+			char name[1024];
+			sscanf_s(msg.data(), "login %s", name, (int)msg.size());
+			client_name_ = name;
+
+			std::cout << client_name_ << " enters into the room." << std::endl;
+			if (number_clients_ == 1)
+				std::cout << " There is " << number_clients_ << " person into the room." << std::endl;
+			else
+				std::cout << " There are " << number_clients_ << " people into the room." << std::endl;
+			memset(read_buffer_, 0, sizeof(read_buffer_));
+			do_read();
+		}
+		else
+		{
+			std::string error_test = err.message();
+			stop();
+		}
+	}
+
 	//void on_write(const error_code& err, size_t bytes) {
 	//	do_read();
 	//}
 
+	void do_login()
+	{
+		if (sock_.is_open())
+			async_read(sock_, buffer(read_buffer_), MEM_FN2(read_complete, _1, _2), MEM_FN2(on_login, _1, _2));
+	}
 	void do_read() {
-		async_read(sock_, buffer(read_buffer_),	MEM_FN2(read_complete, _1, _2), MEM_FN2(on_read, _1, _2));
+		if(sock_.is_open())
+			async_read(sock_, buffer(read_buffer_),	MEM_FN2(read_complete, _1, _2), MEM_FN2(on_read, _1, _2));
 	}
 	//void do_write(const std::string& msg) {
 	//	if (!started()) return;
@@ -68,8 +107,13 @@ private:
 	enum { max_msg = 1024 };
 	char read_buffer_[max_msg];
 	char write_buffer_[max_msg];
+	std::string client_name_;
 	bool started_;
+
+	static int number_clients_;
 };
+
+int talk_to_client::number_clients_ = 0;
 
 ip::tcp::acceptor acceptor(service, ip::tcp::endpoint(ip::tcp::v4(),
   8001));

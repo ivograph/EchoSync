@@ -35,7 +35,7 @@ public:
 	void on_connect(const error_code& err) {
 		if (!err)
 		{
-			do_write("login " + username_ + "\n");
+			do_write("login " + username_);
 		}
 		else
 		{
@@ -88,8 +88,12 @@ public:
 	//}
 	void do_write(const std::string& msg) {
 		if (!started()) return;
+		memset(write_buffer_, 0, sizeof(write_buffer_));
 		std::copy(msg.begin(), msg.end(), write_buffer_);
-		sock_.async_write_some(buffer(write_buffer_, msg.size()), MEM_FN2(on_write, _1, _2));
+		write_buffer_[msg.size()] = '\n';
+		//write_buffer_[msg.size()+1] = '\0';
+		if (sock_.is_open())
+			sock_.async_write_some(buffer(write_buffer_, msg.size()+1), MEM_FN2(on_write, _1, _2));
 	}
 private:
 	//size_t read_complete(const boost::system::error_code& err, size_t
